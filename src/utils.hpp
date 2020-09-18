@@ -1,3 +1,4 @@
+#include <iostream>
 #include "portaudio.h"
 #include "pa_mac_core.h"
 #include <stdexcept>
@@ -12,7 +13,8 @@ void checkError(PaError err)
 }
 
 PaStream *createNewPaStream(
-    int deviceID,
+    int inputDeviceID,
+    int outputDeviceID,
     int *inputChannelSelector,
     int outputNumberOfChannels,
     int *outputChannelSelector,
@@ -31,10 +33,10 @@ PaStream *createNewPaStream(
     inputCoreInfo.channelMap = inputChannelSelector;
     inputCoreInfo.channelMapSize = 1;
     PaStreamParameters inputParameters;
-    inputParameters.device = deviceID;
+    inputParameters.device = inputDeviceID;
     inputParameters.channelCount = 1;
-    inputParameters.sampleFormat = paFloat32;
-    inputParameters.suggestedLatency = Pa_GetDeviceInfo(deviceID)->defaultLowInputLatency;
+    inputParameters.sampleFormat = paInt16;
+    inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputDeviceID)->defaultLowInputLatency;
     inputParameters.hostApiSpecificStreamInfo = &inputCoreInfo;
     PaMacCoreStreamInfo outputCoreInfo;
     outputCoreInfo.size = sizeof(PaMacCoreStreamInfo);
@@ -44,13 +46,44 @@ PaStream *createNewPaStream(
     outputCoreInfo.channelMap = outputChannelSelector;
     outputCoreInfo.channelMapSize = outputNumberOfChannels;
     PaStreamParameters outputParameters;
-    outputParameters.device = deviceID;
+    outputParameters.device = outputDeviceID;
     outputParameters.channelCount = outputNumberOfChannels;
-    outputParameters.sampleFormat = paFloat32;
-    outputParameters.suggestedLatency = Pa_GetDeviceInfo(deviceID)->defaultLowOutputLatency;
+    outputParameters.sampleFormat = paInt16;
+    outputParameters.suggestedLatency = Pa_GetDeviceInfo(outputDeviceID)->defaultLowOutputLatency;
     outputParameters.hostApiSpecificStreamInfo = &outputCoreInfo;
     PaStream *answer;
     err = Pa_OpenStream(&answer, &inputParameters, &outputParameters, sampleRate, framesPerBuffer, paNoFlag, paStreamCallback, userData);
     checkError(err);
     return answer;
+}
+
+void printDeviceInfos()
+{
+    PaError err = Pa_Initialize();
+    checkError(err);
+    int numberOfDevices = Pa_GetDeviceCount();
+    for (int i = 0; i < numberOfDevices; i++)
+    {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        std::cout << "[" << i << "]" << std::endl;
+        std::cout << info->name << std::endl;
+        std::cout << "I/O max channels: " << info->maxInputChannels << "/" << info->maxOutputChannels << "\n"
+                  << std::endl;
+    }
+    Pa_Terminate();
+}
+
+void startStream(PaStream *stream)
+{
+    PaError err = Pa_StartStream(stream);
+    checkError(err);
+}
+
+void closeStream(PaStream *stream)
+{
+    PaError err = Pa_StopStream(stream);
+    checkError(err);
+    err = Pa_CloseStream(stream);
+    checkError(err);
+    Pa_Terminate();
 }
