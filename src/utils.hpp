@@ -2,6 +2,7 @@
 #include "portaudio.h"
 #include "pa_mac_core.h"
 #include <stdexcept>
+#include <cmath>
 
 void checkError(PaError err)
 {
