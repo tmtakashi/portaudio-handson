@@ -1,12 +1,14 @@
 #include <iostream>
 #include "portaudio.h"
 #include "utils.hpp"
+#include "effects.hpp"
 
 typedef struct
 {
     double *inputTempArray;
     double **outputTempArray;
     int numberOfOutputChannels;
+    Effects::DistortionProcessor *distortionProcessor;
 } UserData;
 
 void process(double *in,
@@ -17,7 +19,7 @@ void process(double *in,
 {
     for (int c = 0; c < numberOfOutputChannels; ++c)
     {
-        memcpy(out[c], in, sizeof(double) * frameLength);
+        ((UserData *)userData)->distortionProcessor->process(in, out[c]);
     }
 }
 
@@ -88,6 +90,19 @@ int main()
         userData.outputTempArray[c] = new double[frameLength];
     }
     userData.numberOfOutputChannels = numberOfOutputChannels;
+
+    double gain = 2;
+    double ampMax = 100.0;
+    double ampMin = -100.0;
+    int numberOfPoints = 100000;
+    Effects::DistortionProcessor distp(
+        gain,
+        ampMax,
+        ampMin,
+        frameLength,
+        numberOfPoints);
+
+    userData.distortionProcessor = &distp;
 
     PaStream *stream = createNewPaStream(
         inputDeviceNumber,
