@@ -3,12 +3,22 @@
 #include "utils.hpp"
 #include "effects.hpp"
 
+typedef enum
+{
+    DELAY,
+    AUTOTUNE,
+    DISTORTION
+} EffectTypes;
+
+#define EFFECT_TYPE DELAY
+
 typedef struct
 {
     double *inputTempArray;
     double **outputTempArray;
     int numberOfOutputChannels;
     Effects::DistortionProcessor *distortionProcessor;
+    Effects::DelayProcessor *delayProcessor;
 } UserData;
 
 void process(double *in,
@@ -17,9 +27,23 @@ void process(double *in,
              int frameLength,
              void *userData)
 {
-    for (int c = 0; c < numberOfOutputChannels; ++c)
+    switch (EFFECT_TYPE)
     {
-        ((UserData *)userData)->distortionProcessor->process(in, out[c]);
+    case DISTORTION:
+        ((UserData *)userData)->distortionProcessor->process(in, out[0]);
+        break;
+    case DELAY:
+        ((UserData *)userData)->delayProcessor->process(in, out[0]);
+        break;
+    case AUTOTUNE:
+        break;
+    default:
+        std::cout << "no such effects" << std::endl;
+        break;
+    }
+    for (int c = 1; c < numberOfOutputChannels; ++c)
+    {
+        memcpy(out[c], out[0], frameLength * sizeof(double));
     }
 }
 
@@ -66,8 +90,8 @@ int main()
     printDeviceInfos();
     int frameLength = 64;
     int numberOfOutputChannels = 2;
-    int inputDeviceNumber = 0;
-    int outputDeviceNumber = 4;
+    int inputDeviceNumber = 1;
+    int outputDeviceNumber = 0;
 
     int *inputChannelSelector = new int[1];
     inputChannelSelector[0] = 0;
@@ -102,6 +126,17 @@ int main()
         frameLength,
         numberOfPoints);
 
+    double feedbackGain = 0.4;
+    int numberOfFeedbacks = 100;
+    double delayTimeInSecs = 0.3;
+    Effects::DelayProcessor delayp(
+        frameLength,
+        sampleRate,
+        feedbackGain,
+        numberOfFeedbacks,
+        delayTimeInSecs);
+
+    userData.delayProcessor = &delayp;
     userData.distortionProcessor = &distp;
 
     PaStream *stream = createNewPaStream(
