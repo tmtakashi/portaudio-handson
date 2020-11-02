@@ -2,6 +2,9 @@
 #include <cmath>
 #include "portaudio.h"
 #include "utils.hpp" //ここにPaStreamを作った
+#include "distortion.hpp"
+#include "delay.hpp"
+#include "autotune.hpp"
 
 
 typedef enum{
@@ -10,7 +13,7 @@ typedef enum{
     DISTORTION,
 } Effect;
 
-#define EFFECT_TYPE DELAY //ここを書き換えれば,ディレイやディストーションなどを切り替えられる
+#define EFFECT_TYPE AUTOTUNE //ここを書き換えれば,ディレイやディストーションなどを切り替えられる
 
 typedef struct{
     double* inputTempArray;
@@ -18,6 +21,7 @@ typedef struct{
     int numberOfOutputChannels;
     DistortionProcessor* distortionProcessor;
     DelayProcessor* delayProcessor;
+    AutoTuneProcessor* autouneProcessor;
 }UserData;
 
 
@@ -36,7 +40,7 @@ void process(
             ((UserData*)userData)->delayProcessor->process(in, out[0]);
             break;
         case AUTOTUNE:
-            //TODO
+            ((UserData*)userData)->autouneProcessor->process(in, out[0]);
             break;
         default:
             std::cout << "Warning: unknown effect type" << std::endl;
@@ -93,7 +97,7 @@ int myCallback( //PaStreamCallback型の関数。これはintを返す型だか�
 
 int main(){
     printDeviceInfos();
-    int frameLength = 64;
+    int frameLength = 4096; //オートチューンでは4096
     int numberOfOutputChannels = 2;
     int inputDeviceNumber = 0; //デバイスの[番号]を選択
     int outputDeviceNumber = 1;
@@ -118,7 +122,7 @@ int main(){
         userData.outputTempArray[i] = new double[frameLength];
     }
  
-    double gain = 2.0; //これを変えて歪み度合いを変える
+    double gain = 40.0; //これを変えて歪み度合いを変える
     double ampMax = 100.0;
     double ampMin = -100.0;
     int numberOfPoints = 100000;
@@ -131,10 +135,9 @@ int main(){
     );
     userData.distortionProcessor = &distp;
 
-
-    double feedbackGain = 0.8;
-    int numberOfFeedbacks = 100;
-    double delayTimeInSecs = 0.1;
+    double feedbackGain = 0.7;
+    int numberOfFeedbacks = 10;
+    double delayTimeInSecs = 0.3;
     DelayProcessor delyp(
         frameLength,
         sampleRate,
@@ -143,6 +146,23 @@ int main(){
         delayTimeInSecs
     );
     userData.delayProcessor = &delyp;
+
+    
+    int processBlockSizeInFrames = 1;
+    double thresholdRatioOfPeriodEstimation = 0.5;
+    bool getsLastIndex = true;
+    double maxDetectingFrequency = 440.0;
+    double minDetectingFrequency = 440.0 / 8.0;
+    AutoTuneProcessor ap(
+        frameLength,
+        processBlockSizeInFrames,
+        thresholdRatioOfPeriodEstimation,
+        getsLastIndex,
+        maxDetectingFrequency,
+        minDetectingFrequency,
+        sampleRate
+    );
+    userData.autouneProcessor = &ap;
 
     PaStream* stream = createNewPaStream(
         inputDeviceNumber,
